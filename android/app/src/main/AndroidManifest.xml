@@ -15,6 +15,10 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <queries>
+        <!-- For Android SpeechRecognizer RecognitionService -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <!-- For Emergency 108/112 Dialer -->
         <intent>
             <action android:name="android.intent.action.DIAL" />

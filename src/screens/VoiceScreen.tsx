@@ -11,8 +11,9 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
+  NativeModules,
+  NativeEventEmitter,
 } from 'react-native';
-import Vapi from '@vapi-ai/react-native';
 import { AppHeader } from '../components/common/AppHeader';
 import { VoiceOrb } from '../components/VoiceOrb';
 import { useAuth } from '../context/AuthContext';
@@ -31,8 +32,7 @@ interface TranscriptItem {
   time: string;
 }
 
-const DEFAULT_VAPI_KEY = '7709f749-ce4c-4a9f-bef2-637223f17258';
-const DEFAULT_VAPI_ID = 'f92542f6-1975-4169-8459-e46684910676';
+const { SpeechRecognition, TextToSpeech } = NativeModules;
 
 export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
   const { activeProfile } = useAuth();
@@ -41,36 +41,114 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
   const [callState, setCallState] = useState<VoiceCallState>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
-  const [activeCaption, setActiveCaption] = useState<string>('Press Start Voice Consultation to begin');
-  const [isSandboxMode, setIsSandboxMode] = useState<boolean>(false);
+  const [activeCaption, setActiveCaption] = useState<string>(
+    'Press Start Voice Consultation to begin'
+  );
+  const [isListeningMic, setIsListeningMic] = useState<boolean>(false);
   const [customQueryInput, setCustomQueryInput] = useState<string>('');
   const [isProcessingQuery, setIsProcessingQuery] = useState<boolean>(false);
 
-  const vapiRef = useRef<Vapi | null>(null);
   const transcriptScrollRef = useRef<ScrollView>(null);
   const speakingTimerRef = useRef<any>(null);
   const isConsultationActiveRef = useRef<boolean>(false);
   const sessionIdRef = useRef<string>(`voice-sess-${Date.now()}`);
 
+  // Setup Native SpeechRecognition & TextToSpeech Event Listeners
   useEffect(() => {
-    // Check config from server
-    ApiEndpoints.getMobileConfig()
-      .then((cfg) => {
-        const key = cfg?.vapi?.public_key;
-        if (key && key !== 'vapi_pk_demo_synapse_rural_2026') {
-          setIsSandboxMode(false);
-        } else {
-          setIsSandboxMode(!DEFAULT_VAPI_KEY);
-        }
-      })
-      .catch(() => {
-        setIsSandboxMode(!DEFAULT_VAPI_KEY);
-      });
+    let subStart: any;
+    let subPartial: any;
+    let subResults: any;
+    let subEnd: any;
+    let subError: any;
+    let subTtsDone: any;
+
+    if (Platform.OS === 'android' && SpeechRecognition) {
+      try {
+        const speechEmitter = new NativeEventEmitter(SpeechRecognition);
+
+        subStart = speechEmitter.addListener('onSpeechStart', () => {
+          if (!isConsultationActiveRef.current) return;
+          setIsListeningMic(true);
+          setCallState('listening');
+          setActiveCaption(
+            language === 'hi'
+              ? 'सुन रहा हूँ... बोलिए'
+              : 'Listening to your voice... Speak now!'
+          );
+        });
+
+        subPartial = speechEmitter.addListener('onSpeechPartialResults', (e: any) => {
+          if (!isConsultationActiveRef.current) return;
+          if (e?.text) {
+            setActiveCaption(`You: "${e.text}"`);
+          }
+        });
+
+        subResults = speechEmitter.addListener('onSpeechResults', (e: any) => {
+          if (!isConsultationActiveRef.current) return;
+          setIsListeningMic(false);
+          const recognizedText = e?.text?.trim();
+          if (recognizedText) {
+            handleSendVoiceQuery(recognizedText);
+          } else {
+            setActiveCaption(
+              language === 'hi'
+                ? 'आवाज नहीं आई — माइक बटन दबाकर फिर से बोलें।'
+                : 'No voice detected — tap mic to speak again.'
+            );
+            setCallState('listening');
+          }
+        });
+
+        subEnd = speechEmitter.addListener('onSpeechEnd', () => {
+          setIsListeningMic(false);
+        });
+
+        subError = speechEmitter.addListener('onSpeechError', (err: any) => {
+          setIsListeningMic(false);
+          console.warn('Native speech recognition error:', err);
+          if (isConsultationActiveRef.current) {
+            setActiveCaption(
+              language === 'hi'
+                ? 'माइक तैयार है — नीचे बटन दबाकर बोलें या लक्षण चुनें'
+                : 'Mic ready — tap Speak button or choose a topic below'
+            );
+            setCallState('listening');
+          }
+        });
+      } catch (err) {
+        console.warn('Speech emitter init failed:', err);
+      }
+    }
+
+    if (Platform.OS === 'android' && TextToSpeech) {
+      try {
+        const ttsEmitter = new NativeEventEmitter(TextToSpeech);
+        subTtsDone = ttsEmitter.addListener('onTtsDone', () => {
+          if (isConsultationActiveRef.current) {
+            setCallState('listening');
+            setActiveCaption(
+              language === 'hi'
+                ? 'सुन रहा हूँ — माइक बटन दबाकर अगला सवाल पूछें।'
+                : 'Listening — tap mic to ask your next question.'
+            );
+          }
+        });
+      } catch (err) {
+        console.warn('TTS emitter init failed:', err);
+      }
+    }
 
     return () => {
       endVoiceSession();
+      subStart?.remove();
+      subPartial?.remove();
+      subResults?.remove();
+      subEnd?.remove();
+      subError?.remove();
+      subTtsDone?.remove();
     };
-  }, []);
+  }, [language]);
 
   const requestAudioPermission = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
@@ -84,7 +162,7 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
           PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
           {
             title: 'Microphone Permission Needed',
-            message: 'Synapse-OS needs microphone access for hands-free clinical voice triage.',
+            message: 'Synapse-OS needs microphone access to listen to your symptoms.',
             buttonNeutral: 'Ask Later',
             buttonNegative: 'Cancel',
             buttonPositive: 'Allow',
@@ -112,43 +190,58 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
     }, 100);
   };
 
-  // Activates the Direct Synapse Voice Engine without dropping the consultation
-  const activateLocalVoiceEngine = (initialPrompt?: string) => {
-    setIsSandboxMode(true);
-    setCallState('speaking');
-
-    const defaultGreeting =
-      language === 'hi'
-        ? `नमस्ते ${activeProfile.name}! मैं सिनैप्स-ओएस एआई क्लिनिकल वॉइस डॉक्टर हूँ। मैं सुन रहा हूँ, अपने लक्षण या स्वास्थ्य समस्या बताएं।`
-        : `Namaste ${activeProfile.name}! I am your Synapse-OS AI clinical voice doctor. I am listening, what symptoms are you experiencing?`;
-
-    const greetingToUse = initialPrompt || defaultGreeting;
-    setActiveCaption(`AI Doctor: "${greetingToUse}"`);
-    addTranscript('assistant', greetingToUse);
-
-    if (speakingTimerRef.current) {
-      clearTimeout(speakingTimerRef.current);
+  // Triggers native Android Speech Recognition
+  const startMicCapture = async () => {
+    const hasMic = await requestAudioPermission();
+    if (!hasMic) {
+      Alert.alert('Microphone Permission', 'Please allow microphone access in phone settings.');
+      return;
     }
 
-    speakingTimerRef.current = setTimeout(() => {
-      if (isConsultationActiveRef.current) {
+    if (Platform.OS === 'android' && SpeechRecognition) {
+      try {
+        // Stop any running TTS speech first
+        TextToSpeech?.stop();
+        setIsListeningMic(true);
         setCallState('listening');
         setActiveCaption(
           language === 'hi'
-            ? 'सुन रहा हूँ — अपने लक्षण बताएं या नीचे दिए गए विकल्प चुनें...'
-            : 'Listening — speak your symptoms or choose a topic below...'
+            ? 'सुन रहा हूँ... अब अपने लक्षण बोलिए 🎙️'
+            : 'Listening... Speak your symptoms clearly now 🎙️'
         );
+        await SpeechRecognition.startListening(language);
+      } catch (err: any) {
+        console.warn('Speech start error:', err);
+        setIsListeningMic(false);
       }
-    }, 3800);
+    }
   };
 
-  // Real-Time Query Deliberation via Multi-Agent Swarm
+  const stopMicCapture = async () => {
+    if (Platform.OS === 'android' && SpeechRecognition) {
+      try {
+        await SpeechRecognition.stopListening();
+        setIsListeningMic(false);
+      } catch (err) {
+        console.warn('Speech stop error:', err);
+      }
+    }
+  };
+
+  // Main Consultation Dispatcher: Queries Live Multi-Agent Swarm on Render & Speaks Response
   const handleSendVoiceQuery = async (queryToSend?: string) => {
     const text = (queryToSend || customQueryInput).trim();
     if (!text || isProcessingQuery) return;
 
     setCustomQueryInput('');
     setIsProcessingQuery(true);
+    setIsListeningMic(false);
+
+    // Stop ongoing speech/mic
+    if (Platform.OS === 'android') {
+      SpeechRecognition?.stopListening();
+      TextToSpeech?.stop();
+    }
 
     // Record user query in transcript & caption
     addTranscript('user', text);
@@ -170,29 +263,34 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
         .replace(/---/g, '')
         .trim();
 
-      // Transition to speaking state
+      // Set speaking state
       setCallState('speaking');
       const previewCaption =
-        cleanResponse.length > 110
-          ? `${cleanResponse.slice(0, 110)}...`
+        cleanResponse.length > 120
+          ? `${cleanResponse.slice(0, 120)}...`
           : cleanResponse;
       setActiveCaption(`AI Doctor: "${previewCaption}"`);
       addTranscript('assistant', cleanResponse);
 
-      // Simulate natural speech duration
-      const speechDuration = Math.min(8500, Math.max(3500, cleanResponse.length * 35));
-
-      if (speakingTimerRef.current) {
-        clearTimeout(speakingTimerRef.current);
+      // Speak aloud through native Android TextToSpeech
+      if (Platform.OS === 'android' && TextToSpeech && !isMuted) {
+        try {
+          await TextToSpeech.speak(cleanResponse, language);
+        } catch (ttsErr) {
+          console.warn('TTS speak error:', ttsErr);
+        }
       }
 
+      // Safety fallback timer if TTS listener doesn't fire
+      const speechDuration = Math.min(10000, Math.max(4000, cleanResponse.length * 40));
+      if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
       speakingTimerRef.current = setTimeout(() => {
         if (isConsultationActiveRef.current) {
           setCallState('listening');
           setActiveCaption(
             language === 'hi'
-              ? 'सुन रहा हूँ — क्या आप कुछ और पूछना चाहते हैं?'
-              : 'Listening — what other symptoms or questions do you have?'
+              ? 'सुन रहा हूँ — माइक दबाकर अगला सवाल पूछें।'
+              : 'Listening — tap mic to ask another question.'
           );
         }
       }, speechDuration);
@@ -207,12 +305,18 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
       setActiveCaption(`AI Doctor: "${fallbackNotice}"`);
       addTranscript('assistant', fallbackNotice);
 
+      if (Platform.OS === 'android' && TextToSpeech && !isMuted) {
+        try {
+          TextToSpeech.speak(fallbackNotice, language);
+        } catch {}
+      }
+
       speakingTimerRef.current = setTimeout(() => {
         if (isConsultationActiveRef.current) {
           setCallState('listening');
-          setActiveCaption('Listening — speak your health concern...');
+          setActiveCaption('Listening — tap mic to speak...');
         }
-      }, 3500);
+      }, 4000);
     } finally {
       setIsProcessingQuery(false);
     }
@@ -229,134 +333,53 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
     }
 
     isConsultationActiveRef.current = true;
-    setCallState('connecting');
-    setActiveCaption('Connecting to Synapse Clinical Voice Doctor...');
     setTranscripts([]);
 
-    let vapiPublicKey = DEFAULT_VAPI_KEY;
-    let vapiAssistantId = DEFAULT_VAPI_ID;
-
-    try {
-      const config = await ApiEndpoints.getMobileConfig();
-      if (
-        config?.vapi?.public_key &&
-        config.vapi.public_key !== 'vapi_pk_demo_synapse_rural_2026'
-      ) {
-        vapiPublicKey = config.vapi.public_key;
-      }
-      if (
-        config?.vapi?.assistant_id &&
-        config.vapi.assistant_id !== 'vapi_asst_demo_synapse_rural_2026'
-      ) {
-        vapiAssistantId = config.vapi.assistant_id;
-      }
-    } catch {}
-
-    const firstGreeting =
+    const welcomeGreeting =
       language === 'hi'
-        ? `नमस्ते ${activeProfile.name}! मैं सिनैप्स ओएस एआई क्लिनिकल वॉइस डॉक्टर हूँ। मैं सुन रहा हूँ, आपकी क्या मदद कर सकता हूँ?`
-        : `Hello ${activeProfile.name}! I am your Synapse-OS AI clinical voice doctor. How can I assist with your health today?`;
+        ? `नमस्ते ${activeProfile.name}! मैं सिनैप्स-ओएस एआई क्लिनिकल वॉइस डॉक्टर हूँ। मैं सुन रहा हूँ, अपने लक्षण बताएं।`
+        : `Namaste ${activeProfile.name}! I am your Synapse-OS AI clinical voice doctor. I am listening, please speak your symptoms.`;
 
-    if (vapiPublicKey && vapiAssistantId) {
+    setCallState('speaking');
+    setActiveCaption(`AI Doctor: "${welcomeGreeting}"`);
+    addTranscript('assistant', welcomeGreeting);
+
+    // Speak initial greeting aloud
+    if (Platform.OS === 'android' && TextToSpeech) {
       try {
-        const vapiInstance = new Vapi(vapiPublicKey);
-        vapiRef.current = vapiInstance;
-
-        vapiInstance.on('call-start', () => {
-          if (!isConsultationActiveRef.current) return;
-          setCallState('speaking');
-          setActiveCaption('Connected! AI Voice Doctor speaking...');
-        });
-
-        vapiInstance.on('speech-start', () => {
-          if (!isConsultationActiveRef.current) return;
-          setCallState('speaking');
-        });
-
-        vapiInstance.on('speech-end', () => {
-          if (!isConsultationActiveRef.current) return;
-          setCallState('listening');
-          setActiveCaption('Listening — speak your health concern clearly...');
-        });
-
-        vapiInstance.on('message', (msg: any) => {
-          if (!isConsultationActiveRef.current) return;
-
-          if (msg?.type === 'transcript') {
-            const transcriptText = msg?.transcript || '';
-            if (!transcriptText) return;
-
-            if (msg.transcriptType === 'partial') {
-              if (msg.role === 'user') {
-                setActiveCaption(`You: "${transcriptText}"`);
-              } else {
-                setActiveCaption(`Doctor: "${transcriptText}"`);
-              }
-            } else if (msg.transcriptType === 'final') {
-              if (msg.role === 'user') {
-                addTranscript('user', transcriptText);
-                setActiveCaption(`You: "${transcriptText}"`);
-              } else if (msg.role === 'assistant') {
-                addTranscript('assistant', transcriptText);
-                setActiveCaption(`Doctor: "${transcriptText}"`);
-              }
-            }
-          }
-        });
-
-        // If WebRTC ends or disconnects unexpectedly, DO NOT drop the call!
-        // Transition seamlessly to the Synapse Direct Voice Engine so user can keep talking.
-        vapiInstance.on('call-end', () => {
-          console.log('Vapi WebRTC call ended event');
-          if (isConsultationActiveRef.current) {
-            activateLocalVoiceEngine();
-          }
-        });
-
-        vapiInstance.on('error', (err: any) => {
-          console.warn('Vapi live error event:', err);
-          if (isConsultationActiveRef.current) {
-            activateLocalVoiceEngine();
-          }
-        });
-
-        const vapiOptions: any = {
-          firstMessage: firstGreeting,
-          model: {
-            provider: 'groq',
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              {
-                role: 'system',
-                content: `You are Synapse-OS AI Clinical Voice Doctor for rural India. The patient is ${activeProfile.name} (ABHA ID: ${activeProfile.abhaId}, Age: ${activeProfile.age}, Gender: ${activeProfile.gender}). Provide immediate symptom triage, safe Indian dosages (Dolo 650, ORS, Pan-40), and emergency 108 ambulance advice. Keep spoken answers short and concise in ${currentLanguageInfo.nativeName}.`,
-              },
-            ],
-          },
-        };
-
-        const startRes = await vapiInstance.start(vapiAssistantId, vapiOptions);
-        if (!startRes) {
-          console.log('Vapi start returned null, activating Synapse Voice Engine');
-          activateLocalVoiceEngine(firstGreeting);
-        }
-      } catch (err: any) {
-        console.warn('Vapi start exception:', err);
-        activateLocalVoiceEngine(firstGreeting);
-      }
-    } else {
-      activateLocalVoiceEngine(firstGreeting);
+        TextToSpeech.speak(welcomeGreeting, language);
+      } catch {}
     }
+
+    // Automatically open mic after greeting
+    if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
+    speakingTimerRef.current = setTimeout(() => {
+      if (isConsultationActiveRef.current) {
+        setCallState('listening');
+        setActiveCaption(
+          language === 'hi'
+            ? 'सुन रहा हूँ... बोलिए 🎙️'
+            : 'Listening... Speak your symptoms now 🎙️'
+        );
+        startMicCapture();
+      }
+    }, 4000);
   };
 
   const toggleMute = () => {
     const nextMute = !isMuted;
     setIsMuted(nextMute);
-    if (vapiRef.current) {
-      try {
-        vapiRef.current.setMuted(nextMute);
-      } catch {}
+    if (nextMute) {
+      if (Platform.OS === 'android') {
+        SpeechRecognition?.stopListening();
+        TextToSpeech?.stop();
+      }
+      setCallState('muted');
+      setActiveCaption('Microphone muted.');
+    } else {
+      setCallState('listening');
+      setActiveCaption('Microphone unmuted — tap Speak to talk.');
     }
-    setCallState(nextMute ? 'muted' : 'listening');
   };
 
   const endVoiceSession = () => {
@@ -364,14 +387,15 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
     if (speakingTimerRef.current) {
       clearTimeout(speakingTimerRef.current);
     }
-    if (vapiRef.current) {
+    if (Platform.OS === 'android') {
       try {
-        vapiRef.current.stop();
+        SpeechRecognition?.cancel();
+        TextToSpeech?.stop();
       } catch {}
-      vapiRef.current = null;
     }
     setCallState('idle');
     setIsMuted(false);
+    setIsListeningMic(false);
     setActiveCaption('Voice consultation completed.');
   };
 
@@ -454,9 +478,7 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
         <View style={styles.sandboxNotice}>
           <Text style={styles.sandboxNoticeText}>
             {isActive
-              ? isSandboxMode
-                ? '● Synapse Clinical Voice Council Active • 24/7 AI Doctor'
-                : '● Live Vapi AI Voice WebRTC Active • Low Latency'
+              ? '● Synapse AI Voice Doctor Live • Speech & Sound Active'
               : 'ℹ️ Hands-Free Rural Health Voice Consultation'}
           </Text>
         </View>
@@ -484,7 +506,9 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
             />
             <Text style={styles.stateLabel}>
               {callState === 'listening'
-                ? 'Listening — Speak to Doctor'
+                ? isListeningMic
+                  ? 'Listening to your voice...'
+                  : 'Listening — Tap mic to speak'
                 : callState === 'speaking'
                 ? 'AI Doctor Speaking...'
                 : callState === 'connecting'
@@ -498,6 +522,33 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
           {/* Active Caption */}
           <Text style={styles.captionText}>{activeCaption}</Text>
         </View>
+
+        {/* Prominent Tap to Speak Mic Trigger Button when call is active */}
+        {isActive && (
+          <View style={styles.micTriggerArea}>
+            <TouchableOpacity
+              style={[
+                styles.tapToSpeakBtn,
+                isListeningMic && styles.tapToSpeakBtnListening,
+              ]}
+              onPress={isListeningMic ? stopMicCapture : startMicCapture}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.tapToSpeakIcon}>
+                {isListeningMic ? '⏹️' : '🎙️'}
+              </Text>
+              <Text style={styles.tapToSpeakText}>
+                {isListeningMic
+                  ? language === 'hi'
+                    ? 'सुन रहा हूँ... (रोकने के लिए दबाएं)'
+                    : 'Listening... (Tap to Stop)'
+                  : language === 'hi'
+                  ? 'बोलने के लिए दबाएं (Tap to Speak)'
+                  : 'Tap to Speak into Microphone'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* In-Call Quick Spoken Query Presets */}
         {isActive && (
@@ -564,7 +615,12 @@ export const VoiceScreen: React.FC<VoiceScreenProps> = ({ navigation }) => {
       {/* In-Call Spoken Query Input Bar */}
       {isActive && (
         <View style={styles.voiceInputBar}>
-          <Text style={styles.voiceInputMicIcon}>🎙️</Text>
+          <TouchableOpacity
+            onPress={startMicCapture}
+            style={[styles.miniMicBtn, isListeningMic && styles.miniMicBtnActive]}
+          >
+            <Text style={styles.voiceInputMicIcon}>🎙️</Text>
+          </TouchableOpacity>
           <TextInput
             style={styles.voiceTextInput}
             placeholder={
@@ -709,6 +765,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minHeight: 40,
   },
+  micTriggerArea: {
+    width: '100%',
+    marginVertical: 8,
+  },
+  tapToSpeakBtn: {
+    backgroundColor: '#047857',
+    borderRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: '#34d399',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  tapToSpeakBtnListening: {
+    backgroundColor: '#b91c1c',
+    borderColor: '#f87171',
+    shadowColor: '#ef4444',
+  },
+  tapToSpeakIcon: {
+    fontSize: 20,
+  },
+  tapToSpeakText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
   simPromptsCard: {
     backgroundColor: '#131d33',
     borderRadius: 16,
@@ -716,7 +807,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginTop: 14,
+    marginTop: 10,
     elevation: 3,
   },
   simPromptsTitle: {
@@ -749,7 +840,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     width: '100%',
-    marginTop: 16,
+    marginTop: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     elevation: 3,
@@ -811,13 +902,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#131f37',
     borderRadius: 24,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#1e3a5f',
     gap: 8,
+  },
+  miniMicBtn: {
+    padding: 4,
+  },
+  miniMicBtnActive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 12,
   },
   voiceInputMicIcon: {
     fontSize: 18,

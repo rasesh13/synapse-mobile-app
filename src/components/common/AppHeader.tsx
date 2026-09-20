@@ -45,6 +45,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigateToRecords }) => 
 
   return (
     <View style={styles.headerContainer}>
+      {/* Indian Tricolor Accent Line */}
+      <View style={styles.tricolorBar}>
+        <View style={[styles.tricolorSegment, { backgroundColor: '#FF9933' }]} />
+        <View style={[styles.tricolorSegment, { backgroundColor: '#FFFFFF' }]} />
+        <View style={[styles.tricolorSegment, { backgroundColor: '#138808' }]} />
+      </View>
+
       {/* Top row: Brand + Action Badges */}
       <View style={styles.topRow}>
         <View style={styles.brandContainer}>
@@ -60,7 +67,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigateToRecords }) => 
                 <Text style={styles.badgeLiveText}>RURAL</Text>
               </View>
             </View>
-            <Text style={styles.brandSubtitle}>Swarm AI Healthcare</Text>
+            <Text style={styles.brandSubtitle}>Swarm AI Clinical OS</Text>
           </View>
         </View>
 
@@ -110,21 +117,26 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigateToRecords }) => 
         onPress={() => setShowProfileSwitcher(true)}
         activeOpacity={0.85}
       >
-        <Image source={avatarSource} style={styles.avatar} />
+        <View style={styles.avatarWrap}>
+          <Image source={avatarSource} style={styles.avatar} />
+          <View style={styles.onlineBadge} />
+        </View>
         <View style={styles.profileInfo}>
           <View style={styles.profileNameRow}>
             <Text style={styles.profileName} numberOfLines={1}>
               {activeProfile.name}
             </Text>
             <View style={styles.sandboxBadge}>
-              <Text style={styles.sandboxBadgeText}>ABDM Sandbox</Text>
+              <Text style={styles.sandboxBadgeText}>ABDM Verified</Text>
             </View>
           </View>
           <Text style={styles.profileAbha} numberOfLines={1}>
-            ABHA: {activeProfile.abhaId} • {activeProfile.bloodType}
+            ABHA: {activeProfile.abhaId} • Blood: {activeProfile.bloodType}
           </Text>
         </View>
-        <Text style={styles.switchText}>Switch ▼</Text>
+        <View style={styles.switchPill}>
+          <Text style={styles.switchText}>Switch ▾</Text>
+        </View>
       </TouchableOpacity>
 
       {/* Modals */}
@@ -216,12 +228,24 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigateToRecords }) => 
 
 const styles = StyleSheet.create({
   headerContainer: {
-    backgroundColor: '#0f172a',
-    paddingTop: 12,
-    paddingBottom: 10,
+    backgroundColor: '#0c1322',
+    paddingTop: 8,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  tricolorBar: {
+    flexDirection: 'row',
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 10,
+    width: '100%',
+  },
+  tricolorSegment: {
+    flex: 1,
+    height: '100%',
   },
   topRow: {
     flexDirection: 'row',
@@ -236,7 +260,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 38,
     height: 38,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   brandTitleRow: {
     flexDirection: 'row',
@@ -246,26 +270,28 @@ const styles = StyleSheet.create({
   brandTitle: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   badgeLive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#10b981',
   },
   badgeLiveText: {
     color: '#10b981',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   brandSubtitle: {
     color: '#94a3b8',
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -279,15 +305,17 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   languagePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 20,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     gap: 4,
   },
@@ -295,42 +323,65 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   languagePillText: {
-    color: '#e2e8f0',
+    color: '#f1f5f9',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   sosButton: {
     backgroundColor: '#dc2626',
     borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderWidth: 1,
     borderColor: '#ef4444',
+    elevation: 4,
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
   },
   sosButtonText: {
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
   profileBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
-    padding: 8,
-    marginTop: 10,
+    backgroundColor: '#131d33',
+    borderRadius: 14,
+    padding: 10,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    elevation: 3,
+  },
+  avatarWrap: {
+    position: 'relative',
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#334155',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1e293b',
+    borderWidth: 1.5,
+    borderColor: '#10b981',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10b981',
+    borderWidth: 1.5,
+    borderColor: '#131d33',
   },
   profileInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   profileNameRow: {
     flexDirection: 'row',
@@ -338,33 +389,41 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   profileName: {
-    color: '#f8fafc',
+    color: '#ffffff',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   sandboxBadge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderColor: '#38bdf8',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10b981',
     borderWidth: 1,
     borderRadius: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
   },
   sandboxBadgeText: {
-    color: '#38bdf8',
+    color: '#34d399',
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   profileAbha: {
     color: '#94a3b8',
     fontSize: 11,
-    marginTop: 1,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  switchPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   switchText: {
-    color: '#10b981',
-    fontSize: 11,
-    fontWeight: '600',
-    paddingHorizontal: 6,
+    color: '#34d399',
+    fontSize: 10,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,

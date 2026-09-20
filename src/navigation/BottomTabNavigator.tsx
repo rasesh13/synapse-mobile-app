@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ChatScreen } from '../screens/ChatScreen';
@@ -20,7 +20,7 @@ export const BottomTabNavigator: React.FC = () => {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: '#10b981',
-        tabBarInactiveTintColor: '#64748b',
+        tabBarInactiveTintColor: '#94a3b8',
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarItemStyle: styles.tabBarItem,
       }}
@@ -31,7 +31,7 @@ export const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: t('tab_home') || 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            <View style={[styles.iconPill, focused && styles.iconPillActive]}>
               <Text style={styles.tabIcon}>🏠</Text>
             </View>
           ),
@@ -44,7 +44,7 @@ export const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: t('tab_chat') || 'AI Chat',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            <View style={[styles.iconPill, focused && styles.iconPillActive]}>
               <Text style={styles.tabIcon}>🩺</Text>
             </View>
           ),
@@ -59,12 +59,11 @@ export const BottomTabNavigator: React.FC = () => {
           tabBarIcon: ({ color, focused }) => (
             <View
               style={[
-                styles.iconWrap,
-                styles.voiceIconWrap,
-                focused && styles.voiceIconWrapActive,
+                styles.centerVoiceButton,
+                focused && styles.centerVoiceButtonActive,
               ]}
             >
-              <Text style={styles.voiceTabIcon}>🎙️</Text>
+              <Text style={styles.centerVoiceIcon}>🎙️</Text>
             </View>
           ),
         }}
@@ -76,7 +75,7 @@ export const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: t('tab_records') || 'Records',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            <View style={[styles.iconPill, focused && styles.iconPillActive]}>
               <Text style={styles.tabIcon}>🆔</Text>
             </View>
           ),
@@ -89,7 +88,7 @@ export const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: t('tab_whatsapp') || 'WhatsApp',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            <View style={[styles.iconPill, focused && styles.iconPillActive]}>
               <Text style={styles.tabIcon}>💬</Text>
             </View>
           ),
@@ -101,48 +100,65 @@ export const BottomTabNavigator: React.FC = () => {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#0c1322',
+    backgroundColor: '#0f172a',
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    height: 64,
-    paddingBottom: 8,
-    paddingTop: 6,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    height: Platform.OS === 'android' ? 66 : 78,
+    paddingBottom: Platform.OS === 'android' ? 8 : 20,
+    paddingTop: 8,
+    elevation: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
   tabBarItem: {
-    minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  iconWrap: {
+  iconPill: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 32,
-    height: 28,
+    width: 38,
+    height: 30,
+    borderRadius: 15,
   },
-  iconWrapActive: {
-    transform: [{ scale: 1.1 }],
+  iconPillActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   tabIcon: {
     fontSize: 18,
   },
-  voiceIconWrap: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#065f46',
-    width: 36,
-    height: 36,
-    marginTop: -4,
+  centerVoiceButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#132038',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -14,
+    borderWidth: 2,
+    borderColor: '#06b6d4',
+    elevation: 8,
+    shadowColor: '#06b6d4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
   },
-  voiceIconWrapActive: {
-    backgroundColor: '#065f46',
+  centerVoiceButtonActive: {
+    backgroundColor: '#047857',
     borderColor: '#10b981',
+    shadowColor: '#10b981',
   },
-  voiceTabIcon: {
-    fontSize: 20,
+  centerVoiceIcon: {
+    fontSize: 22,
   },
 });

@@ -39,20 +39,22 @@ export const NetworkSettingsModal: React.FC<NetworkSettingsModalProps> = ({ visi
 
   const handleReset = async () => {
     await resetApiHost();
-    setInputHost('https://ethical-skills-golf-answering.trycloudflare.com');
-    Alert.alert('Reset', 'Backend URL restored to live public cloud HTTPS.');
+    setInputHost('https://synapse-backend-32ye.onrender.com');
+    Alert.alert('Reset', 'Backend URL restored to 24/7 Render Cloud endpoint.');
   };
 
+  const isConnected = readiness?.status === 'READY' || isOnline;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>⚙️ {t('settings_title')}</Text>
-            <View style={[styles.statusBadge, isOnline ? styles.statusOnline : styles.statusOffline]}>
-              <View style={[styles.statusDot, isOnline ? styles.dotOnline : styles.dotOffline]} />
-              <Text style={[styles.statusText, isOnline ? styles.textOnline : styles.textOffline]}>
-                {isOnline ? 'Online' : 'Offline'}
+            <Text style={styles.title}>{t('settings_network_title')}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: isConnected ? '#ecfdf5' : '#fef2f2' }]}>
+              <View style={[styles.statusDot, { backgroundColor: isConnected ? '#10b981' : '#ef4444' }]} />
+              <Text style={[styles.statusText, { color: isConnected ? '#065f46' : '#991b1b' }]}>
+                {isConnected ? t('online') : t('offline')}
               </Text>
             </View>
           </View>
@@ -64,15 +66,15 @@ export const NetworkSettingsModal: React.FC<NetworkSettingsModalProps> = ({ visi
             onChangeText={setInputHost}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="e.g. http://10.0.2.2:8000 or https://..."
+            placeholder="e.g. https://synapse-backend-32ye.onrender.com"
             placeholderTextColor="#94a3b8"
           />
 
           <View style={styles.helperBox}>
             <Text style={styles.helperText}>
-              • Live Cloud HTTPS: https://ethical-skills-golf-answering.trycloudflare.com{'\n'}
-              • Android Emulator: http://10.0.2.2:8000{'\n'}
-              • Local Wi-Fi (LAN): http://10.10.114.241:8000
+              • 24/7 Render Cloud: https://synapse-backend-32ye.onrender.com{'\n'}
+              • Cloudflare Edge: https://ethical-skills-golf-answering.trycloudflare.com{'\n'}
+              • Android Emulator: http://10.0.2.2:8000
             </Text>
           </View>
 

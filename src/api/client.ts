@@ -13,8 +13,8 @@ export interface ApiError {
   isNetworkError: boolean;
 }
 
-// Live Public Cloud HTTPS backend deployment
-export const DEFAULT_API_BASE_URL = 'https://ethical-skills-golf-answering.trycloudflare.com';
+// Live 24/7 Render Cloud Deployment
+export const DEFAULT_API_BASE_URL = 'https://synapse-backend-32ye.onrender.com';
 
 let currentBaseUrl = DEFAULT_API_BASE_URL;
 

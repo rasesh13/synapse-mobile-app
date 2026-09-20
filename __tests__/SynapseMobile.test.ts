@@ -89,8 +89,8 @@ describe('SynapseOS Mobile — Core Logic & Domain Verification', () => {
   });
 
   describe('4. API Client Host Configuration', () => {
-    it('defaults to live public cloud HTTPS URL', () => {
-      expect(DEFAULT_API_BASE_URL).toBe('https://ethical-skills-golf-answering.trycloudflare.com');
+    it('defaults to live 24/7 Render cloud HTTPS URL', () => {
+      expect(DEFAULT_API_BASE_URL).toBe('https://synapse-backend-32ye.onrender.com');
     });
 
     it('allows dynamic API host switching at runtime', () => {
